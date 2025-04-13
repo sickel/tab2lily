@@ -5,7 +5,7 @@ import sys
 
 sharps = ['c','cis','d','dis','e','f','fis','g','gis','a','ais','b']
 flats =  ['c','des','d','ees','e','f','ges','g','aes','a','bes','b']
-durations = {'W':1, 'H':2, 'Q':4, 'E':8, 'S':16, 'T':32, 'X':64}
+durations = {'W':'1', 'H':'2', 'Q':'4', 'E':'8', 'S':'16', 'T':'32', 'X':'64'}
 
 """
 W - whole; H - half; Q - quarter; E - 8th; S - 16th; T - 32nd; X - 64th; a - acciaccatura
@@ -60,10 +60,10 @@ for idx,line in enumerate(tab):
         firsttabread = ntablines > 0
         if tab[idx-1].startswith('|'):
             ntabset += 1
-            print(ntabset,file = sys.stderr)
+            # print(ntabset,file = sys.stderr)
             tabset = tab[idx-ntablines:idx]
-            print(f'tabset:{tabset} {len(tabset)}',file = sys.stderr)
-            print('---',file = sys.stderr)
+            #print(f'tabset:{tabset} {len(tabset)}',file = sys.stderr)
+            #print('---',file = sys.stderr)
             if durationlineidx:
                 durationline = tab[idx-ntablines-durationlineidx]
         else:
@@ -79,30 +79,37 @@ for idx,line in enumerate(tab):
     for charidx in range(tablen):
         note = None
         for tabidx,tabline in enumerate(tabset):
+            duration = ''
             linenote = None
             if durationlineidx:
-                duration = ''
                 try:
                     if durationline[charidx] in durations:
+                        # print(durationline[charidx],file=sys.stderr)
                         duration = durations[durationline[charidx]]
-                        if durationline[charidx+1] == '.':
-                            duration = f'{duration}.'
+                        if len(durationline) > charidx+1:
+                            if durationline[charidx+1] == '.':
+                                duration += '.'
+                            tie = durationline[charidx+1:].strip().startswith('+')
+                            if tie:
+                                duration += '~'
                 except IndexError:
-                    # May try to read a dot out of line
+                    # May try to read a dot after eol
                     pass
-
-            else:
-                duration=''
+                    # print('idxerr',file=sys.stderr)
             char = tabline[charidx]
+            if char in ['(',')']:
+                continue
             try:
                 fret = int(char)
                 noteidx = stringidx[tabidx]+fret
                 note = notes[noteidx]
                 linenote = note
-                print(f'fret {char} on string {tabidx} is {note}, {duration}',file = sys.stderr)
+                # print(f'fret {char} on string {tabidx} is {note}, {duration}',file = sys.stderr)
                 print(f'{note}{duration}', end=' ')
             except:
                 pass
+        if char == '|' and tabline[charidx-1] == '|':
+            print('\\bar "||"')
         if duration != '' and linenote is None:
             print(f'r{duration}', end = ' ')
             duration = ''
