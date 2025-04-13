@@ -97,8 +97,6 @@ for idx,line in enumerate(tab):
                     pass
                     # print('idxerr',file=sys.stderr)
             char = tabline[charidx]
-            if char in ['(',')']:
-                continue
             try:
                 fret = int(char)
                 noteidx = stringidx[tabidx]+fret
