@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 
 import sys
-
+import re
+import argparse
 
 sharps = ['c','cis','d','dis','e','f','fis','g','gis','a','ais','b']
 flats =  ['c','des','d','ees','e','f','ges','g','aes','a','bes','b']
@@ -18,17 +19,34 @@ bar rests are notated in the form Wxn, where n is the number of bars to rest for
 melody durations appear below the staff
 """
 
+parser = argparse.ArgumentParser(
+                    prog='tab2lily',
+                    description='Converts asciitab to lilypond notation. Reads <filename.ext>, outputs <filename.lil>',
+                    epilog='(c) Morten Sickel 2025')
+
+parser.add_argument('filename')
+parser.add_argument('--time', default='4/4', help='Time signatur, default: 4/4', type=str)
+parser.add_argument('--composer', default='', type =str)
+parser.add_argument('--title', default = '',type =str)
+parser.add_argument('--lilypondversion', help='default: 2.24.1', default='2.24.1')
+parser.add_argument('--strings',help='Strings, default: eadgbe', default='eadgbe')
+args =parser.parse_args()
+filename = args.filename
+filenameparts = filename.split('.')
+outfilename = filenameparts[0]+'.lil'
+composer = args.composer
+time = args.time
+versionstring = f'\\version "{args.lilypondversion}"'
+title = args.title
 durationlineidx = 1 # 1st line before the tab
-strings = ['e','a','d','g','b','e']
-time = 'C'
+commentlineidx = 2
+strings = list(args.strings)
 clef = 'bass'
+
 sharpkey = False
 
 
-if len(sys.argv) >1:
-    filename = sys.argv[1]
-    outfile = filename + '.lil'
-else:
+if not filename:
     print('No file',file=sys.stderr)
     sys.exit(2)
 ntablines = 0
@@ -41,31 +59,46 @@ else:
     notes = flats
 for string in strings:
     stringidx.append(notes.index(string))
-
-with open(filename) as tabfile:
+outfile = open(outfilename,'w')
+with open(filename,'r') as tabfile:
     tab = tabfile.readlines()
 
 def checkstart(line):
     return line.startswith('|')
 
 tabset = []
-print(f'{{\n \\time {time}\n \\clef {clef}')
+print(f"""{versionstring}
+      \\header{{
+    title = "{title}"
+    composer ="{composer}"}}
+""", file = outfile)
+print(f"""{{
+    \\time {time}
+    \\clef {clef}
+""", file = outfile)
+
+
 for idx,line in enumerate(tab):
     line=line.strip()
     if checkstart(line):
         if not firsttabread:
-            ntablines += 1
+             ntablines += 1
         continue
     else:
         firsttabread = ntablines > 0
         if tab[idx-1].startswith('|'):
             ntabset += 1
-            # print(ntabset,file = sys.stderr)
             tabset = tab[idx-ntablines:idx]
-            #print(f'tabset:{tabset} {len(tabset)}',file = sys.stderr)
-            #print('---',file = sys.stderr)
             if durationlineidx:
                 durationline = tab[idx-ntablines-durationlineidx]
+            comments = {}
+            if commentlineidx:
+                commentline = tab[idx-ntablines-commentlineidx]
+                commentlist = re.split(r'\s{2,}', commentline)
+                for comment in commentlist:
+                    comment = comment.strip()
+                    comments[commentline.find(comment)] = comment
+                #print(comments,file = sys.stderr)
         else:
             continue
     equallen = True
@@ -73,18 +106,21 @@ for idx,line in enumerate(tab):
     for tabline in tabset:
         equallen = equallen and len(tabline) == tablen
     if not equallen:
-        print(f'Fault tab {idx}, {tabset}',file = sys.stderr)
+        print(f'Warning: Invalid tabset {idx}: {tabset}',file = sys.stderr)
         continue
 
     for charidx in range(tablen):
         note = None
+        frets = []
+        if commentlineidx:
+            pass
         for tabidx,tabline in enumerate(tabset):
+            frets.append(tabline[charidx])
             duration = ''
             linenote = None
             if durationlineidx:
                 try:
                     if durationline[charidx] in durations:
-                        # print(durationline[charidx],file=sys.stderr)
                         duration = durations[durationline[charidx]]
                         if len(durationline) > charidx+1:
                             if durationline[charidx+1] == '.':
@@ -102,17 +138,18 @@ for idx,line in enumerate(tab):
                 noteidx = stringidx[tabidx]+fret
                 note = notes[noteidx]
                 linenote = note
-                # print(f'fret {char} on string {tabidx} is {note}, {duration}',file = sys.stderr)
-                print(f'{note}{duration}', end=' ')
+                print(f'{note}{duration}', end=' ', file=outfile)
             except:
                 pass
         if char == '|' and tabline[charidx-1] == '|':
-            print('\\bar "||"')
-        if duration != '' and linenote is None:
-            print(f'r{duration}', end = ' ')
+            print('\\bar "||"', file = outfile)
+        if duration != '' and len(set(frets))==1 and frets[0] == '-' :
+            print(f'r{duration}', end = ' ' ,file=outfile)
             duration = ''
-    print(' ')
+        if charidx in comments and comments[charidx] > "":
+            print(f'^"{comments[charidx]}"', file= outfile)
+    print(' ', file = outfile)
     tabset = []
 
-print('}')
-# print(ntablines)
+print('}', file = outfile)
+print(f"\n   Written to {outfilename}")
